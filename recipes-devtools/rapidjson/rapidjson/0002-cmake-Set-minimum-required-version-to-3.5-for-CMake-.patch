@@ -1,0 +1,51 @@
+From ec5e24fd8b8a0090adf60fa39f82e493bd7483c6 Mon Sep 17 00:00:00 2001
+From: Ilies CHERGUI <ichergui@nvidia.com>
+Date: Tue, 19 Aug 2025 14:06:34 +0100
+Subject: [PATCH 2/2] cmake: Set minimum required version to 3.5 for CMake 4+
+ compatibility
+
+Fix:
+
+| CMake Error at CMakeLists.txt:1 (cmake_minimum_required):
+|   Compatibility with CMake < 3.5 has been removed from CMake.
+|
+|   Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+|   to tell CMake that the project requires at least <min> but has been updated
+|   to work with policies introduced by <max> or earlier.
+|
+|   Or, add -DCMAKE_POLICY_VERSION_MINIMUM=3.5 to try configuring anyway.
+|
+|
+| -- Configuring incomplete, errors occurred!
+
+Upstream-Status: Inappropriate [OE-specific]
+Signed-off-by: Ilies CHERGUI <ichergui@nvidia.com>
+---
+ RapidJSONConfig.cmake.in | 2 +-
+ example/CMakeLists.txt   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/RapidJSONConfig.cmake.in b/RapidJSONConfig.cmake.in
+index c25d3125..2e49514b 100644
+--- a/RapidJSONConfig.cmake.in
++++ b/RapidJSONConfig.cmake.in
+@@ -1,6 +1,6 @@
+ ################################################################################
+ # CMake minimum version required
+-cmake_minimum_required(VERSION 3.0)
++cmake_minimum_required(VERSION 3.5)
+
+ ################################################################################
+ # RapidJSON source dir
+diff --git a/example/CMakeLists.txt b/example/CMakeLists.txt
+index 9f53c9aa..c25951af 100644
+--- a/example/CMakeLists.txt
++++ b/example/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 2.8)
++cmake_minimum_required(VERSION 3.5)
+
+ if(POLICY CMP0054)
+   cmake_policy(SET CMP0054 NEW)
+-- 
+2.34.1
