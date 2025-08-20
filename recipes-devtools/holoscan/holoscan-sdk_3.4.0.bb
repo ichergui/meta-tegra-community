@@ -4,7 +4,7 @@ LICENSE = "Apache-2.0"
 LIC_FILES_CHKSUM = "file://LICENSE.txt;md5=3b83ef96387f14655fc854ddc3c6bd57"
 
 SRC_URI = "git://github.com/nvidia-holoscan/holoscan-sdk.git;protocol=https;branch=main;tag=v${PV}"
-SRCREV = "c5ef83de6188d625735b93aa8c96619b65a329d0"
+SRCREV = "9c5b3c3d4831f2e65ebda6b79ae9b1c5517c6a7c"
 
 SRC_URI += " \
     file://desktop-icons \
@@ -14,7 +14,6 @@ SRC_URI += " \
     file://0004-Fix-TensorRT-include-interface.patch \
     file://0005-Disable-various-warnings-as-errors.patch \
     file://0006-Remove-GXF-python-modules-install.patch \
-    file://0007-Updates-for-OE-cross-builds.patch \
 "
 
 HOLOSCAN_INSTALL_PATH = "/opt/nvidia/holoscan"
@@ -91,6 +90,7 @@ DEPENDS += " \
     python3-pybind11 \
     cpm-cmake \
     rapids-cmake \
+    libeigen \
 "
 
 RDEPENDS:${PN} = " \
