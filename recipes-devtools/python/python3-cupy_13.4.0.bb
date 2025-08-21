@@ -12,7 +12,7 @@ SRCREV = "fca48bc15b00c17ac583ccd122bea4920f185b62"
 
 DEPENDS += " \
     cccl jitify cuda-profiler-api cuda-cudart cuda-nvrtc cuda-nvtx \
-    cuda-cccl libcublas libcufft libcurand libcusparse nccl nvtx \
+    libcublas libcufft libcurand libcusparse nccl nvtx \
     dlpack python3-cython-native python3-fastrlock-native python3-numpy-native \
 "
 
