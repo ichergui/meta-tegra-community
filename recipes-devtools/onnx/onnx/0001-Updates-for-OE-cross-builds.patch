@@ -1,16 +1,18 @@
-From c9941abc4adb38b2e9037f432b3aa46696e3c732 Mon Sep 17 00:00:00 2001
+From 6c3058ae8fee37ac6ebfdf77525b3387cc4c324b Mon Sep 17 00:00:00 2001
 From: Ilies CHERGUI <ichergui@nvidia.com>
-Date: Mon, 28 Apr 2025 15:39:47 +0100
+Date: Mon, 20 Oct 2025 18:21:36 +0100
 Subject: [PATCH] Updates for OE cross builds
 
 Upstream-Status: Inappropriate [OE-specific]
 Signed-off-by: Ilies CHERGUI <ichergui@nvidia.com>
 ---
- CMakeLists.txt | 41 ++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 38 insertions(+), 3 deletions(-)
+ CMakeLists.txt      | 58 +++++++++++++++++++++++++++++++++++----------
+ cmake/summary.cmake |  8 +++----
+ setup.py            |  5 ++--
+ 3 files changed, 53 insertions(+), 18 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d15d97ed..a0e098ff 100644
+index d15d97ed..13e243b6 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -14,8 +14,32 @@ endif()
@@ -47,7 +49,52 @@ index d15d97ed..a0e098ff 100644
  option(ONNX_USE_PROTOBUF_SHARED_LIBS "Build ONNX using protobuf shared library. Sets PROTOBUF_USE_DLLS CMAKE Flag and Protobuf_USE_STATIC_LIBS. " OFF)
  
  option(BUILD_ONNX_PYTHON "Build Python binaries" OFF)
-@@ -466,7 +490,13 @@ list(REMOVE_ITEM __tmp_srcs "${ONNX_ROOT}/onnx/cpp2py_export.cc")
+@@ -134,16 +158,13 @@ if((ONNX_USE_LITE_PROTO AND TARGET protobuf::libprotobuf-lite) OR ((NOT ONNX_USE
+     message(STATUS "Using custom protoc executable")
+     set(ONNX_PROTOC_EXECUTABLE ${ONNX_CUSTOM_PROTOC_EXECUTABLE})
+   else()
+-    set(ONNX_PROTOC_EXECUTABLE $<TARGET_FILE:protobuf::protoc>)
++    set(ONNX_PROTOC_EXECUTABLE "${Protobuf_PROTOC_EXECUTABLE}")
+   endif()
+ else()
+   # Customized version of find Protobuf. We need to avoid situations mentioned
+   # in https://github.com/caffe2/caffe2/blob/b7d983f255ef5496474f1ea188edb5e0ac4
+   # 42761/cmake/ProtoBuf.cmake#L82-L92 The following section is stolen from
+   # cmake/ProtoBuf.cmake in Caffe2
+-  find_program(Protobuf_PROTOC_EXECUTABLE
+-               NAMES protoc
+-               DOC "The Google Protocol Buffers Compiler")
+ 
+   # Only if protoc was found, seed the include directories and libraries. We
+   # assume that protoc is installed at PREFIX/bin. We use get_filename_component
+@@ -172,7 +193,7 @@ else()
+     find_path(Protobuf_INCLUDE_DIR google/protobuf/service.h
+               PATHS ${_PROTOBUF_INSTALL_PREFIX}/include
+               NO_DEFAULT_PATH)
+-    find_package(Protobuf)
++    find_package(Protobuf REQUIRED)
+     if (Protobuf_FOUND)
+       set(PROTOBUF_DIR "${_PROTOBUF_INSTALL_PREFIX}")
+       set(PROTOBUF_INCLUDE_DIR "${_PROTOBUF_INSTALL_PREFIX}/include")
+@@ -261,7 +282,7 @@ else()
+     set(protobuf_BUILD_TESTS OFF CACHE BOOL "Build protobuf tests" FORCE)
+     message(STATUS "Download and build Protobuf from ${ProtobufURL}")
+     FetchContent_MakeAvailable(Protobuf Abseil)
+-    set(ONNX_PROTOC_EXECUTABLE $<TARGET_FILE:protobuf::protoc>)
++    set(ONNX_PROTOC_EXECUTABLE "${Protobuf_PROTOC_EXECUTABLE}")
+     set(Protobuf_VERSION "4.22.3")
+     # Change back the BUILD_SHARED_LIBS to control the onnx project.
+     set(BUILD_SHARED_LIBS ${ONNX_BUILD_SHARED_LIBS})
+@@ -270,6 +291,8 @@ else()
+   endif()
+   message(STATUS "ONNX_PROTOC_EXECUTABLE: ${ONNX_PROTOC_EXECUTABLE}")
+   message(STATUS "Protobuf_VERSION: ${Protobuf_VERSION}")
++  message(STATUS "Protobuf includes: ${Protobuf_INCLUDE_DIR}")
++  message(STATUS "Protobuf libraries: ${Protobuf_LIBRARY}")
+ endif()
+ 
+ # abseil build would fail if ONNX_WERROR is on.
+@@ -466,12 +489,18 @@ list(REMOVE_ITEM __tmp_srcs "${ONNX_ROOT}/onnx/cpp2py_export.cc")
  list(REMOVE_ITEM __tmp_srcs ${onnx_gtests_src})
  list(APPEND ONNX_SRCS ${__tmp_srcs})
  
@@ -62,7 +109,22 @@ index d15d97ed..a0e098ff 100644
  add_dependencies(onnx_proto gen_onnx_operators_proto gen_onnx_data_proto)
  target_include_directories(onnx_proto PUBLIC
    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-@@ -522,7 +552,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "AIX")
+   $<INSTALL_INTERFACE:include>
+-  $<BUILD_INTERFACE:${PROTOBUF_INCLUDE_DIRS}>)
++  ${Protobuf_INCLUDE_DIR})
+ 
+ if (MSVC)
+   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+@@ -512,7 +541,7 @@ else()
+   if(TARGET protobuf::libprotobuf)
+     target_link_libraries(onnx_proto PUBLIC protobuf::libprotobuf PRIVATE ${protobuf_ABSL_USED_TARGETS})
+   else()
+-    target_link_libraries(onnx_proto PUBLIC ${PROTOBUF_LIBRARIES})
++    target_link_libraries(onnx_proto PUBLIC ${Protobuf_LIBRARY})
+   endif()
+ endif()
+ add_onnx_global_defines(onnx_proto)
+@@ -522,7 +551,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "AIX")
    # So, create a object library
    add_library(onnx OBJECT ${ONNX_SRCS})
  else()
@@ -76,6 +138,53 @@ index d15d97ed..a0e098ff 100644
  endif()
  
  target_include_directories(onnx PUBLIC
+@@ -554,7 +588,7 @@ if(BUILD_ONNX_PYTHON)
+                              $<INSTALL_INTERFACE:include>)
+ 
+   # pybind11 is a header only lib
+-  find_package(pybind11 2.2 CONFIG)
++  find_package(pybind11 CONFIG REQUIRED)
+   if(NOT pybind11_FOUND)
+     if(EXISTS "${ONNX_ROOT}/third_party/pybind11/include/pybind11/pybind11.h")
+       add_subdirectory("${ONNX_ROOT}/third_party/pybind11")
+diff --git a/cmake/summary.cmake b/cmake/summary.cmake
+index fbe6b28a..3a60fac8 100644
+--- a/cmake/summary.cmake
++++ b/cmake/summary.cmake
+@@ -29,13 +29,13 @@ function (onnx_print_configuration_summary)
+   message(STATUS "  ONNX_BUILD_SHARED_LIBS            : ${ONNX_BUILD_SHARED_LIBS}")
+   message(STATUS "  BUILD_SHARED_LIBS                 : ${BUILD_SHARED_LIBS}")
+   message(STATUS "")
+-  message(STATUS "  Protobuf compiler                 : ${PROTOBUF_PROTOC_EXECUTABLE}")
+-  message(STATUS "  Protobuf includes                 : ${PROTOBUF_INCLUDE_DIRS}")
+-  message(STATUS "  Protobuf libraries                : ${PROTOBUF_LIBRARIES}")
++  message(STATUS "  Protobuf compiler                 : ${Protobuf_PROTOC_EXECUTABLE}")
++  message(STATUS "  Protobuf includes                 : ${Protobuf_INCLUDE_DIR}")
++  message(STATUS "  Protobuf libraries                : ${Protobuf_LIBRARY}")
+   message(STATUS "  BUILD_ONNX_PYTHON                 : ${BUILD_ONNX_PYTHON}")
+   if (${BUILD_ONNX_PYTHON})
+     message(STATUS "    Python version                : ${PY_VERSION}")
+     message(STATUS "    Python executable             : ${PYTHON_EXECUTABLE}")
+-    message(STATUS "    Python includes               : ${PYTHON_INCLUDE_DIR}")
++    message(STATUS "    Python includes               : ${PYTHON_INCLUDE_DIRS}")
+   endif()
+ endfunction()
+diff --git a/setup.py b/setup.py
+index 7d2cb9e5..2dc860c0 100644
+--- a/setup.py
++++ b/setup.py
+@@ -158,8 +158,9 @@ class CmakeBuild(setuptools.Command):
+             # configure
+             cmake_args = [
+                 CMAKE,
+-                f"-DPYTHON_INCLUDE_DIR={sysconfig.get_path('include')}",
+-                f"-DPYTHON_EXECUTABLE={sys.executable}",
++                f"-DPYTHON_INCLUDE_DIRS={os.getenv("PYTHON_INCLUDE_DIR")}",
++                f"-DPYTHON_EXECUTABLE={os.getenv("PYTHON")}",
++                f"-DProtobuf_PROTOC_EXECUTABLE={os.getenv("PROTOBUF_PROTOC_EXECUTABLE")}",
+                 "-DBUILD_ONNX_PYTHON=ON",
+                 "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+                 f"-DONNX_NAMESPACE={ONNX_NAMESPACE}",
 -- 
 2.34.1
 
