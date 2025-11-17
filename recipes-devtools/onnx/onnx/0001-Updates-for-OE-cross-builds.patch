@@ -1,21 +1,21 @@
-From c9941abc4adb38b2e9037f432b3aa46696e3c732 Mon Sep 17 00:00:00 2001
+From de2b4b72284741301213a12a9e6672abbee0df60 Mon Sep 17 00:00:00 2001
 From: Ilies CHERGUI <ichergui@nvidia.com>
-Date: Mon, 28 Apr 2025 15:39:47 +0100
+Date: Fri, 14 Nov 2025 15:12:01 +0000
 Subject: [PATCH] Updates for OE cross builds
 
 Upstream-Status: Inappropriate [OE-specific]
 Signed-off-by: Ilies CHERGUI <ichergui@nvidia.com>
 ---
- CMakeLists.txt | 41 ++++++++++++++++++++++++++++++++++++++---
- 1 file changed, 38 insertions(+), 3 deletions(-)
+ CMakeLists.txt | 40 ++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 38 insertions(+), 2 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d15d97ed..a0e098ff 100644
+index 8b5af303..da4b8a6c 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -14,8 +14,32 @@ endif()
- cmake_policy(SET CMP0063 NEW)
- cmake_policy(SET CMP0074 NEW)
+@@ -19,8 +19,33 @@ if(NOT BUILD_SHARED_LIBS)
+   set(BUILD_SHARED_LIBS OFF)
+ endif()
  
 +function(onnx_extract_version)
 +    file(READ "${CMAKE_SOURCE_DIR}/VERSION_NUMBER" ONNX_VERSION)
@@ -42,12 +42,12 @@ index d15d97ed..a0e098ff 100644
 +onnx_extract_version()
 +
  # Project
--project(onnx C CXX)
+ project(onnx LANGUAGES C CXX)
 +project(onnx VERSION ${ONNX_VERSION} LANGUAGES C CXX)
- option(ONNX_USE_PROTOBUF_SHARED_LIBS "Build ONNX using protobuf shared library. Sets PROTOBUF_USE_DLLS CMAKE Flag and Protobuf_USE_STATIC_LIBS. " OFF)
  
- option(BUILD_ONNX_PYTHON "Build Python binaries" OFF)
-@@ -466,7 +490,13 @@ list(REMOVE_ITEM __tmp_srcs "${ONNX_ROOT}/onnx/cpp2py_export.cc")
+ if(DEFINED BUILD_ONNX_PYTHON)
+   message(WARNING "'BUILD_ONNX_PYTHON' is deprecated. Please, use 'ONNX_BUILD_PYTHON' instead")
+@@ -470,7 +495,13 @@ list(REMOVE_ITEM __tmp_srcs "${ONNX_ROOT}/onnx/cpp2py_export.cc")
  list(REMOVE_ITEM __tmp_srcs ${onnx_gtests_src})
  list(APPEND ONNX_SRCS ${__tmp_srcs})
  
@@ -62,7 +62,7 @@ index d15d97ed..a0e098ff 100644
  add_dependencies(onnx_proto gen_onnx_operators_proto gen_onnx_data_proto)
  target_include_directories(onnx_proto PUBLIC
    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-@@ -522,7 +552,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "AIX")
+@@ -519,7 +550,12 @@ if(CMAKE_SYSTEM_NAME STREQUAL "AIX")
    # So, create a object library
    add_library(onnx OBJECT ${ONNX_SRCS})
  else()
@@ -74,8 +74,8 @@ index d15d97ed..a0e098ff 100644
 +  endif()
 +  set_target_properties(onnx PROPERTIES VERSION ${ONNX_VERSION} SOVERSION ${ONNX_VERSION_MAJOR}.${ONNX_VERSION_MINOR})
  endif()
- 
- target_include_directories(onnx PUBLIC
+ set_target_properties(onnx PROPERTIES CXX_VISIBILITY_PRESET hidden)
+ set_target_properties(onnx PROPERTIES VISIBILITY_INLINES_HIDDEN ON)
 -- 
 2.34.1
 

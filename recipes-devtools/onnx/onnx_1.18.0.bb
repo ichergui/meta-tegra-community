@@ -7,7 +7,7 @@ SRC_URI = " \
     git://github.com/onnx/onnx.git;protocol=https;branch=rel-${PV};tag=v${PV} \
     file://0001-Updates-for-OE-cross-builds.patch \
 "
-SRCREV = "b8baa8446686496da4cc8fda09f2b6fe65c2a02c"
+SRCREV = "e709452ef2bbc1d113faf678c24e6d3467696e83"
 
 inherit cmake
 
