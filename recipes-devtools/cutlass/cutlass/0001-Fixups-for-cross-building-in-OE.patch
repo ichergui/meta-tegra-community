@@ -1,41 +1,45 @@
-From cdb69f4c643e4f5aa4aceba13b39d0066bb4ef0b Mon Sep 17 00:00:00 2001
+From c8ee209b707475541337a5bd0a30b9a4d016f69e Mon Sep 17 00:00:00 2001
 From: Ilies CHERGUI <ichergui@nvidia.com>
-Date: Wed, 12 Nov 2025 19:20:57 +0000
+Date: Fri, 14 Nov 2025 15:34:20 +0000
 Subject: [PATCH] Fixups for cross building in OE
 
 Upstream-Status: Inappropriate [OE-specific]
 Signed-off-by: Ilies CHERGUI <ichergui@nvidia.com>
 ---
- CMakeLists.txt                        | 23 -----------------------
- cmake/googletest.cmake                | 24 +-----------------------
- include/cutlass/cuda_host_adapter.hpp |  2 +-
- include/cutlass/matrix.h              |  8 ++++----
- include/cutlass/platform/platform.h   | 10 +++++-----
- python/cutlass/emit/pytorch.py        |  5 -----
- 6 files changed, 11 insertions(+), 61 deletions(-)
+ CMakeLists.txt                                | 28 -------------------
+ cmake/googletest.cmake                        | 25 +----------------
+ .../CMakeLists.txt                            |  3 ++
+ include/cutlass/platform/platform.h           | 10 +++----
+ python/cutlass/emit/pytorch.py                |  5 ----
+ 5 files changed, 9 insertions(+), 62 deletions(-)
 
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 7419bdf5..5fd29087 100755
+index b54b8335..3bfc89fa 100755
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -146,16 +146,6 @@ endif()
+@@ -163,21 +163,6 @@ set(CUTLASS_ENABLE_SELF_CONTAINED_INCLUDES_CHECK ON CACHE BOOL "Enable CUTLASS c
  
  ################################################################################
  
 -set(CUTLASS_NVCC_ARCHS_SUPPORTED "")
--if (CUDA_VERSION VERSION_GREATER_EQUAL 11.4 AND NOT CUDA_COMPILER MATCHES "[Cc]lang")
+-if (CUDA_VERSION VERSION_GREATER_EQUAL 11.4)
 -  list(APPEND CUTLASS_NVCC_ARCHS_SUPPORTED 70 72 75 80 86 87)
 -endif()
--if (CUDA_VERSION VERSION_GREATER_EQUAL 11.8 AND NOT CUDA_COMPILER MATCHES "[Cc]lang")
+-if (CUDA_VERSION VERSION_GREATER_EQUAL 11.8)
 -  list(APPEND CUTLASS_NVCC_ARCHS_SUPPORTED 89 90)
 -endif()
--if (CUDA_VERSION VERSION_GREATER_EQUAL 12.0 AND NOT CUDA_COMPILER MATCHES "[Cc]lang")
+-if (CUDA_VERSION VERSION_GREATER_EQUAL 12.0)
 -  list(APPEND CUTLASS_NVCC_ARCHS_SUPPORTED 90a)
 -endif()
+-
+-if (CUDA_VERSION VERSION_GREATER_EQUAL 12.8)
+-  list(APPEND CUTLASS_NVCC_ARCHS_SUPPORTED 100 100a 101 101a 120 120a)
+-endif()
+-
  set(CUTLASS_NVCC_ARCHS ${CUTLASS_NVCC_ARCHS_SUPPORTED} CACHE STRING "The SM architectures requested.")
  set(CUTLASS_NVCC_ARCHS_ENABLED ${CUTLASS_NVCC_ARCHS} CACHE STRING "The SM architectures to build code for.")
  
-@@ -716,19 +706,6 @@ if (DOXYGEN_FOUND)
+@@ -756,19 +741,6 @@ if (DOXYGEN_FOUND)
      )
  endif()
  
@@ -56,10 +60,10 @@ index 7419bdf5..5fd29087 100755
  
  include(CTest)
 diff --git a/cmake/googletest.cmake b/cmake/googletest.cmake
-index 0350fb2d..97ecac3b 100644
+index 4983d46c..6908fc52 100644
 --- a/cmake/googletest.cmake
 +++ b/cmake/googletest.cmake
-@@ -26,26 +26,4 @@
+@@ -26,27 +26,4 @@
  # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  
@@ -71,9 +75,10 @@ index 0350fb2d..97ecac3b 100644
 -  set(FETCHCONTENT_SOURCE_DIR_GOOGLETEST ${GOOGLETEST_DIR} CACHE STRING "GoogleTest source directory override")
 -endif()
 -
+-set(GTEST_REPOSITORY "https://github.com/google/googletest.git" CACHE STRING "GoogleTest repo to fetch")
 -FetchContent_Declare(
 -  googletest
--  GIT_REPOSITORY https://github.com/google/googletest.git
+-  GIT_REPOSITORY ${GTEST_REPOSITORY}
 -  GIT_TAG        v1.14.0
 -  )
 -
@@ -87,64 +92,25 @@ index 0350fb2d..97ecac3b 100644
 -  add_subdirectory(${googletest_SOURCE_DIR} ${googletest_BINARY_DIR} EXCLUDE_FROM_ALL)
 -endif()
 +find_package(GTest REQUIRED)
-diff --git a/include/cutlass/cuda_host_adapter.hpp b/include/cutlass/cuda_host_adapter.hpp
-index f9ff723c..f0196ff1 100644
---- a/include/cutlass/cuda_host_adapter.hpp
-+++ b/include/cutlass/cuda_host_adapter.hpp
-@@ -99,7 +99,7 @@ namespace cutlass {
+diff --git a/examples/63_hopper_gemm_with_weight_prefetch/CMakeLists.txt b/examples/63_hopper_gemm_with_weight_prefetch/CMakeLists.txt
+index 72f59476..0a22d82c 100644
+--- a/examples/63_hopper_gemm_with_weight_prefetch/CMakeLists.txt
++++ b/examples/63_hopper_gemm_with_weight_prefetch/CMakeLists.txt
+@@ -28,6 +28,9 @@
  
- #else // defined(CUTLASS_ENABLE_DIRECT_CUDA_DRIVER_CALL)
+ set(TEST_PREFETCH_CASE --m=8192 --n=64 --k=8192 --iterations=0) 
  
--#if (__CUDACC_VER_MAJOR__ >= 12 && __CUDACC_VER_MINOR__ >= 5)
-+#if (__CUDACC_VER_MAJOR__ > 12  || (__CUDACC_VER_MAJOR__ == 12 && __CUDACC_VER_MINOR__ >= 5))
- 
- #define CUTLASS_CUDA_DRIVER_WRAPPER_DECL(func, ver)             \
-   template <typename... Args>                                   \
-diff --git a/include/cutlass/matrix.h b/include/cutlass/matrix.h
-index ab32597e..5d8ccb3c 100644
---- a/include/cutlass/matrix.h
-+++ b/include/cutlass/matrix.h
-@@ -7825,7 +7825,7 @@ struct Matrix<Element_, 3, 3> {
- 
-     Matrix m;
- 
--    m.set_slice3x3({
-+    m.set_slice_3x3({
-       c + x * x * one_minus_cos, x * y * one_minus_cos - z * s, x * z * one_minus_cos + y * s,
-       y * x * one_minus_cos * z * s, c + y * y * one_minus_cos, y * z * one_minus_cos - x * s,
-       z * x * one_minus_cos - y * s, z * y * one_minus_cos + x * s, c + z * z * one_minus_cos
-@@ -7845,7 +7845,7 @@ struct Matrix<Element_, 3, 3> {
- 
-     Matrix m = Matrix::identity();
- 
--    m.set_slice3x3({
-+    m.set_slice_3x3({
-       Element(1) - Element(2) * a * a, Element(-2) * a * b, Element(-2) * a * c,
-       Element(-2) * a * b, Element(1) - Element(2) * b * b, Element(-2) * b * c,
-       Element(-2) * a * c, Element(-2) * b * c, Element(1) - Element(2) * c * c
-@@ -14005,7 +14005,7 @@ struct Matrix<Element_, 4, 4> {
- 
-     Matrix m;
- 
--    m.set_slice3x3({
-+    m.set_slice_3x3({
-       c + x * x * one_minus_cos, x * y * one_minus_cos - z * s, x * z * one_minus_cos + y * s,
-       y * x * one_minus_cos * z * s, c + y * y * one_minus_cos, y * z * one_minus_cos - x * s,
-       z * x * one_minus_cos - y * s, z * y * one_minus_cos + x * s, c + z * z * one_minus_cos
-@@ -14025,7 +14025,7 @@ struct Matrix<Element_, 4, 4> {
- 
-     Matrix m = Matrix::identity();
- 
--    m.set_slice3x3({
-+    m.set_slice_3x3({
-       Element(1) - Element(2) * a * a, Element(-2) * a * b, Element(-2) * a * c,
-       Element(-2) * a * b, Element(1) - Element(2) * b * b, Element(-2) * b * c,
-       Element(-2) * a * c, Element(-2) * b * c, Element(1) - Element(2) * c * c
++set(CMAKE_CXX_STANDARD 20)
++set(CMAKE_CUDA_STANDARD 20)
++
+ cutlass_example_add_executable(
+   63_hopper_gemm_with_weight_prefetch
+   63_hopper_gemm_with_weight_prefetch.cu
 diff --git a/include/cutlass/platform/platform.h b/include/cutlass/platform/platform.h
-index e6a445ea..7ca86605 100644
+index 939451a2..3db980a3 100644
 --- a/include/cutlass/platform/platform.h
 +++ b/include/cutlass/platform/platform.h
-@@ -605,11 +605,11 @@ struct alignment_of<float4> {
+@@ -596,11 +596,11 @@ struct alignment_of<float4> {
    enum { value = 16 };
  };
  template <>
@@ -158,7 +124,7 @@ index e6a445ea..7ca86605 100644
    enum { value = 16 };
  };
  template <>
-@@ -625,15 +625,15 @@ struct alignment_of<double2> {
+@@ -616,15 +616,15 @@ struct alignment_of<double2> {
    enum { value = 16 };
  };
  template <>
@@ -178,10 +144,10 @@ index e6a445ea..7ca86605 100644
  };
  
 diff --git a/python/cutlass/emit/pytorch.py b/python/cutlass/emit/pytorch.py
-index ac13e866..75acfb6c 100644
+index e759596c..ca5911e5 100644
 --- a/python/cutlass/emit/pytorch.py
 +++ b/python/cutlass/emit/pytorch.py
-@@ -766,11 +766,6 @@ def _pytorch_gemm(op, name: str, cc: int, jit: bool = False, sourcedir: str = ""
+@@ -767,11 +767,6 @@ def _pytorch_gemm(op, name: str, cc: int, jit: bool = False, sourcedir: str = ""
      with open(cpp_file, "w") as outfile:
          outfile.write(cpp_source)
  

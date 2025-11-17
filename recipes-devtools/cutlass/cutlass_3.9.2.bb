@@ -1,13 +1,13 @@
 DESCRIPTION = "CUDA Templates for Linear Algebra Subroutines"
 HOMEPAGE = "https://github.com/NVIDIA/cutlass"
 LICENSE = "BSD-3-Clause"
-LIC_FILES_CHKSUM = "file://LICENSE.txt;md5=1132d6687f729bb3e7bf5d41649513d7"
+LIC_FILES_CHKSUM = "file://LICENSE.txt;md5=3a191d1cab4614f6018588fab3f40222"
 
 SRC_URI = " \
     git://github.com/NVIDIA/cutlass.git;protocol=https;branch=main;tag=v${PV} \
     file://0001-Fixups-for-cross-building-in-OE.patch \
 "
-SRCREV = "f7b19de32c5d1f3cedfc735c2849f12b537522ee"
+SRCREV = "ad7b2f5e84fcfa124cb02b91d5bd26d238c0459e"
 
 DEPENDS += "cuda-nvrtc cuda-cudart libcublas googletest"
 
@@ -39,5 +39,4 @@ FILES:${PN}-test += "${prefix}/test"
 
 SOLIBS = "*.so*"
 FILES_SOLIBSDEV = ""
-
 INSANE_SKIP:${PN} = "buildpaths"
