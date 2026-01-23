@@ -1,0 +1,761 @@
+From 30363b9c5d9951d150ee703e3627895cb1072cd6 Mon Sep 17 00:00:00 2001
+From: Ilies CHERGUI <ichergui@nvidia.com>
+Date: Mon, 12 Jan 2026 07:06:13 -0800
+Subject: [PATCH 1/3] Updates for OE cross builds
+
+Upstream-Status: Inappropriate [OE-specific]
+Signed-off-by: Ilies CHERGUI <ichergui@nvidia.com>
+---
+ CMakeLists.txt                                |   5 +
+ cmake/Findibverbs.cmake                       |  31 -----
+ examples/CMakeLists.txt                       | 125 ------------------
+ examples/fusa_coe_imx274_player.cpp           |   4 +-
+ examples/fusa_coe_vb1940_player.cpp           |   4 +-
+ python/hololink/operators/CMakeLists.txt      |   2 -
+ src/hololink/CMakeLists.txt                   |   1 -
+ src/hololink/common/CMakeLists.txt            |   9 +-
+ src/hololink/common/cuda_helper.cpp           |   4 +-
+ src/hololink/core/data_channel.cpp            |  18 +--
+ src/hololink/core/enumerator.cpp              |   4 +-
+ src/hololink/core/hololink.cpp                |   4 +-
+ src/hololink/core/hololink.hpp                |   4 +-
+ src/hololink/core/logging_internal.hpp        |   8 +-
+ src/hololink/core/networking.cpp              |   3 -
+ src/hololink/core/networking.hpp              |   5 +-
+ src/hololink/emulation/coe_data_plane.cpp     |   4 +-
+ src/hololink/emulation/data_plane.cpp         |   2 +-
+ src/hololink/emulation/linux_data_plane.cpp   |   4 +-
+ src/hololink/emulation/linux_transmitter.cpp  |   2 +-
+ src/hololink/emulation/net.hpp                |   2 +-
+ src/hololink/operators/CMakeLists.txt         |   7 -
+ src/hololink/operators/base_receiver_op.hpp   |   2 +-
+ .../operators/csi_to_bayer/csi_to_bayer.cpp   |   2 +-
+ .../fusa_coe_capture/fusa_coe_capture.cpp     |   8 +-
+ .../linux_coe_receiver/linux_coe_receiver.cpp |   2 +-
+ .../packed_format_converter.cpp               |   2 +-
+ tests/CMakeLists.txt                          |  23 ----
+ tools/set_ip/set_ip.cpp                       |   6 +-
+ 29 files changed, 57 insertions(+), 240 deletions(-)
+ delete mode 100644 cmake/Findibverbs.cmake
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index f95e951..69c791b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -49,6 +49,11 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+ # Find globally required dependencies
+ include(hololink_deps/fmt)
+ 
++find_package(nvtx3 3.3.0 REQUIRED)
++find_package(rapids_logger 0.2.0 REQUIRED)
++find_package(rmm 25.10.0 REQUIRED)
++find_package(Eigen3 REQUIRED)
++
+ if (NOT HOLOLINK_BUILD_ONLY_NATIVE)
+   # Find Holoscan
+   find_package(holoscan 3.6 REQUIRED CONFIG PATHS "/opt/nvidia/holoscan")
+diff --git a/cmake/Findibverbs.cmake b/cmake/Findibverbs.cmake
+deleted file mode 100644
+index ac31fd0..0000000
+--- a/cmake/Findibverbs.cmake
++++ /dev/null
+@@ -1,31 +0,0 @@
+-
+-# SPDX-FileCopyrightText: Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+-# SPDX-License-Identifier: Apache-2.0
+-#
+-# Licensed under the Apache License, Version 2.0 (the "License");
+-# you may not use this file except in compliance with the License.
+-# You may obtain a copy of the License at
+-#
+-# http://www.apache.org/licenses/LICENSE-2.0
+-#
+-# Unless required by applicable law or agreed to in writing, software
+-# distributed under the License is distributed on an "AS IS" BASIS,
+-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+-# See the License for the specific language governing permissions and
+-# limitations under the License.
+-
+-include(FindPackageHandleStandardArgs)
+-
+-find_path(ibverbs_INCLUDE_DIRS
+-  NAMES infiniband/verbs.h
+-  )
+-
+-find_library(ibverbs_LIBRARIES
+-  NAMES ibverbs
+-  )
+-
+-find_package_handle_standard_args(ibverbs DEFAULT_MSG
+-  ibverbs_LIBRARIES ibverbs_INCLUDE_DIRS
+-  )
+-
+-mark_as_advanced(ibverbs_INCLUDE_DIRS ibverbs_LIBRARIES)
+diff --git a/examples/CMakeLists.txt b/examples/CMakeLists.txt
+index ca64d49..b7ae9c0 100644
+--- a/examples/CMakeLists.txt
++++ b/examples/CMakeLists.txt
+@@ -15,74 +15,6 @@
+ 
+ set(EXAMPLE_INSTALL_TARGETS)
+ if(NOT HOLOLINK_BUILD_ONLY_NATIVE)
+-add_executable(imx274_player
+-  imx274_player.cpp
+-  )
+-
+-add_test(NAME imx274_player_test
+-          COMMAND imx274_player --frame-limit=10 --headless
+-          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+-set_tests_properties(imx274_player_test PROPERTIES
+-                      FAIL_REGULAR_EXPRESSION "ERROR;\\[error\\]")
+-
+-include(hololink_deps/pybind11)
+-target_link_libraries(imx274_player
+-  PRIVATE
+-    hololink
+-    hololink::operators::csi_to_bayer
+-    hololink::operators::image_processor
+-    hololink::operators::roce_receiver
+-    holoscan::core
+-    holoscan::ops::bayer_demosaic
+-    holoscan::ops::holoviz
+-    holoscan::pybind11
+-    pybind11::embed
+-  )
+-
+-list(APPEND EXAMPLE_INSTALL_TARGETS imx274_player)
+-
+-add_executable(linux_imx274_player
+-  linux_imx274_player.cpp
+-  )
+-
+-add_test(NAME linux_imx274_player_test
+-          COMMAND linux_imx274_player --frame-limit=10 --headless
+-          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+-set_tests_properties(linux_imx274_player_test PROPERTIES
+-                      FAIL_REGULAR_EXPRESSION "ERROR;\\[error\\]")
+-
+-target_link_libraries(linux_imx274_player
+-  PRIVATE
+-    hololink
+-    hololink::operators::csi_to_bayer
+-    hololink::operators::image_processor
+-    hololink::operators::linux_receiver_op
+-    holoscan::core
+-    holoscan::ops::bayer_demosaic
+-    holoscan::ops::holoviz
+-    holoscan::pybind11
+-    pybind11::embed
+-  )
+-
+-list(APPEND EXAMPLE_INSTALL_TARGETS linux_imx274_player)
+-
+-add_executable(vb1940_player
+-  vb1940_player.cpp
+-  )
+-
+-target_link_libraries(vb1940_player
+-  PRIVATE
+-    hololink
+-    hololink::operators::csi_to_bayer
+-    hololink::operators::image_processor
+-    hololink::operators::roce_receiver
+-    hololink::sensors::native_vb1940_camera_sensor
+-    holoscan::core
+-    holoscan::ops::bayer_demosaic
+-    holoscan::ops::holoviz
+-  )
+-
+-list(APPEND EXAMPLE_INSTALL_TARGETS vb1940_player)
+ 
+ if(HOLOLINK_BUILD_FUSA)
+   add_executable(fusa_coe_imx274_player
+@@ -122,45 +54,6 @@ if(HOLOLINK_BUILD_FUSA)
+   list(APPEND EXAMPLE_INSTALL_TARGETS fusa_coe_vb1940_player)
+ endif()
+ 
+-add_executable(single_network_stereo_vb1940_player
+-  single_network_stereo_vb1940_player.cpp
+-  )
+-
+-target_link_libraries(single_network_stereo_vb1940_player
+-  PRIVATE
+-    hololink
+-    hololink::operators::csi_to_bayer
+-    hololink::operators::image_processor
+-    hololink::operators::roce_receiver
+-    hololink::sensors::native_vb1940_camera_sensor
+-    holoscan::core
+-    holoscan::ops::bayer_demosaic
+-    holoscan::ops::holoviz
+-  )
+-
+-list(APPEND EXAMPLE_INSTALL_TARGETS single_network_stereo_vb1940_player)
+-
+-# Signal Generator sample app
+-add_executable(signal_generator
+-  signal_generator.cpp
+-)
+-
+-target_link_libraries(signal_generator
+-  PRIVATE
+-    hololink
+-    hololink::core
+-    hololink::operators::iq_dec
+-    hololink::operators::iq_enc
+-    hololink::operators::roce_receiver
+-    hololink::operators::roce_transmitter
+-    hololink::operators::sig_gen
+-    hololink::operators::sig_viewer
+-    hololink::operators::udp_transmitter
+-    holoscan::core
+-)
+-
+-list(APPEND EXAMPLE_INSTALL_TARGETS signal_generator)
+-
+ if(HOLOLINK_BUILD_SIPL)
+   add_executable(sipl_player
+     sipl_player.cpp
+@@ -181,24 +74,6 @@ if(HOLOLINK_BUILD_SIPL)
+   list(APPEND EXAMPLE_INSTALL_TARGETS sipl_player)
+ endif() # HOLOLINK_BUILD_SIPL
+ 
+-add_executable(linux_single_network_stereo_imx274_player
+-  linux_single_network_stereo_imx274_player.cpp
+-  )
+-
+-target_link_libraries(linux_single_network_stereo_imx274_player
+-  PRIVATE
+-    hololink
+-    hololink::operators::csi_to_bayer
+-    hololink::operators::image_processor
+-    hololink::operators::linux_receiver_op
+-    hololink::sensors::native_imx274_camera_sensor
+-    holoscan::core
+-    holoscan::ops::bayer_demosaic
+-    holoscan::ops::holoviz
+-  )
+-
+-list(APPEND EXAMPLE_INSTALL_TARGETS linux_single_network_stereo_imx274_player)
+-
+ 
+ endif() # NOT HOLOLINK_BUILD_ONLY_NATIVE
+ 
+diff --git a/examples/fusa_coe_imx274_player.cpp b/examples/fusa_coe_imx274_player.cpp
+index fcf1886..c6e09c2 100644
+--- a/examples/fusa_coe_imx274_player.cpp
++++ b/examples/fusa_coe_imx274_player.cpp
+@@ -29,9 +29,9 @@
+ #include <hololink/operators/packed_format_converter/packed_format_converter.hpp>
+ #include <hololink/sensors/camera/imx274/native_imx274_sensor.hpp>
+ 
+-hololink::core::MacAddress parse_mac_address(const std::string& mac_str)
++MacAddress parse_mac_address(const std::string& mac_str)
+ {
+-    hololink::core::MacAddress mac;
++    MacAddress mac;
+     std::istringstream iss(mac_str);
+     std::string byte_str;
+     int i = 0;
+diff --git a/examples/fusa_coe_vb1940_player.cpp b/examples/fusa_coe_vb1940_player.cpp
+index f36165b..c8a6200 100644
+--- a/examples/fusa_coe_vb1940_player.cpp
++++ b/examples/fusa_coe_vb1940_player.cpp
+@@ -27,9 +27,9 @@
+ #include <hololink/operators/packed_format_converter/packed_format_converter.hpp>
+ #include <hololink/sensors/camera/vb1940/native_vb1940_sensor.hpp>
+ 
+-hololink::core::MacAddress parse_mac_address(const std::string& mac_str)
++MacAddress parse_mac_address(const std::string& mac_str)
+ {
+-    hololink::core::MacAddress mac;
++    MacAddress mac;
+     std::istringstream iss(mac_str);
+     std::string byte_str;
+     int i = 0;
+diff --git a/python/hololink/operators/CMakeLists.txt b/python/hololink/operators/CMakeLists.txt
+index ba8bd94..9aede2a 100644
+--- a/python/hololink/operators/CMakeLists.txt
++++ b/python/hololink/operators/CMakeLists.txt
+@@ -29,8 +29,6 @@ add_subdirectory(linux_receiver)
+ add_subdirectory(linux_receiver_op)
+ add_subdirectory(linux_coe_receiver)
+ add_subdirectory(packed_format_converter)
+-add_subdirectory(roce_receiver)
+-add_subdirectory(roce_transmitter)
+ add_subdirectory(sig_gen)
+ add_subdirectory(sig_viewer)
+ if(HOLOLINK_BUILD_SIPL)
+diff --git a/src/hololink/CMakeLists.txt b/src/hololink/CMakeLists.txt
+index d38cb5d..6c61622 100644
+--- a/src/hololink/CMakeLists.txt
++++ b/src/hololink/CMakeLists.txt
+@@ -17,7 +17,6 @@ add_subdirectory(core)
+ add_subdirectory(sensors)
+ if (NOT HOLOLINK_BUILD_ONLY_NATIVE)
+ add_subdirectory(common)
+-add_subdirectory(expr_eval)
+ add_subdirectory(operators)
+ add_subdirectory(emulation)
+ endif()
+diff --git a/src/hololink/common/CMakeLists.txt b/src/hololink/common/CMakeLists.txt
+index e7945b9..36113c8 100644
+--- a/src/hololink/common/CMakeLists.txt
++++ b/src/hololink/common/CMakeLists.txt
+@@ -13,13 +13,10 @@
+ # See the License for the specific language governing permissions and
+ # limitations under the License.
+ 
+-find_package(ibverbs REQUIRED)
+-
+ add_library(hololink STATIC
+   gui_renderer.cpp
+   holoargs.cpp
+   cuda_helper.cpp
+-  tools.cpp
+   )
+ 
+ set_property(TARGET hololink PROPERTY POSITION_INDEPENDENT_CODE ON)
+@@ -30,6 +27,11 @@ target_include_directories(hololink
+     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+   )
+ 
++target_include_directories(hololink
++  PUBLIC
++    ${IMGUI_SOURCE_DIR}
++)
++
+ if(TARGET CUDA::nvtx3)
+   set(CUDA_NVTX_TARGET CUDA::nvtx3)
+ else()
+@@ -43,7 +45,6 @@ target_link_libraries(hololink
+     # Required by the gui_renderer
+     holoscan::viz
+     holoscan::viz::imgui
+-    ${ibverbs_LIBRARIES}
+   PUBLIC
+     hololink::core
+     CUDA::cuda_driver
+diff --git a/src/hololink/common/cuda_helper.cpp b/src/hololink/common/cuda_helper.cpp
+index fbcc7ad..9872337 100644
+--- a/src/hololink/common/cuda_helper.cpp
++++ b/src/hololink/common/cuda_helper.cpp
+@@ -52,8 +52,8 @@ CudaFunctionLauncher::CudaFunctionLauncher(const char* source,
+     for (auto&& option : options) {
+         compile_options.push_back(option.c_str());
+     }
+-    compile_options.push_back("--include-path=/usr/local/cuda/include");
+-    compile_options.push_back("--include-path=/usr/local/cuda/include/cccl");
++    compile_options.push_back("--include-path=/usr/local/cuda-13.0/include/");
++    compile_options.push_back("--include-path=/usr/local/cuda-13.0/include/cccl");
+     if (nvrtcCompileProgram(prog, compile_options.size(), compile_options.data()) != NVRTC_SUCCESS) {
+         // Obtain compilation log from the program.
+         size_t logSize;
+diff --git a/src/hololink/core/data_channel.cpp b/src/hololink/core/data_channel.cpp
+index 177ada7..512a244 100644
+--- a/src/hololink/core/data_channel.cpp
++++ b/src/hololink/core/data_channel.cpp
+@@ -130,7 +130,7 @@ void DataChannel::authenticate(uint32_t qp_number, uint32_t rkey)
+ static uint32_t compute_payload_size(uint32_t frame_size, uint32_t header_size)
+ {
+     const uint32_t mtu = 1472; // TCP/IP illustrated vol 1 (1994), section 11.6, page 151
+-    const uint32_t page_size = hololink::core::PAGE_SIZE;
++    const uint32_t page_size = PAGE_SIZE;
+     uint32_t payload_size = ((mtu - header_size + page_size - 1) / page_size) * page_size;
+     if (payload_size > mtu) {
+         /* Max payload size is 1408 bytes. */
+@@ -147,7 +147,7 @@ void DataChannel::configure_common(uint32_t frame_size, uint32_t header_size, ui
+     uint32_t payload_size = compute_payload_size(frame_size, header_size);
+ 
+     const std::string& peer_ip = this->peer_ip();
+-    auto [local_ip, local_device, local_mac] = core::local_ip_and_mac(peer_ip);
++    auto [local_ip, local_device, local_mac] = local_ip_and_mac(peer_ip);
+ 
+     // Data plane destination addresses
+     uint32_t mac_high = (local_mac[0] << 8) | (local_mac[1] << 0);
+@@ -187,14 +187,14 @@ void DataChannel::configure_common(uint32_t frame_size, uint32_t header_size, ui
+ void DataChannel::configure_roce(uint64_t frame_memory, size_t frame_size, size_t page_size, unsigned pages, uint32_t local_data_port)
+ {
+     // Contract enforcement
+-    if (frame_memory & (hololink::core::PAGE_SIZE - 1)) {
+-        throw std::runtime_error(fmt::format("frame_memory={:#x} must be {}-byte aligned.", frame_memory, hololink::core::PAGE_SIZE));
++    if (frame_memory & (PAGE_SIZE - 1)) {
++        throw std::runtime_error(fmt::format("frame_memory={:#x} must be {}-byte aligned.", frame_memory, PAGE_SIZE));
+     }
+-    if (page_size & (hololink::core::PAGE_SIZE - 1)) {
+-        throw std::runtime_error(fmt::format("page_size={:#x} must be {}-byte aligned.", page_size, hololink::core::PAGE_SIZE));
++    if (page_size & (PAGE_SIZE - 1)) {
++        throw std::runtime_error(fmt::format("page_size={:#x} must be {}-byte aligned.", page_size, PAGE_SIZE));
+     }
+-    size_t aligned_frame_size = hololink::core::round_up(frame_size, hololink::core::PAGE_SIZE);
+-    size_t metadata_size = hololink::core::PAGE_SIZE;
++    size_t aligned_frame_size = round_up(frame_size, PAGE_SIZE);
++    size_t metadata_size = PAGE_SIZE;
+     size_t aligned_frame_with_metadata = aligned_frame_size + metadata_size;
+     if (page_size < aligned_frame_with_metadata) {
+         throw std::runtime_error(fmt::format("page_size={:#x} must be at least {:#x} bytes.", page_size, aligned_frame_with_metadata));
+@@ -302,7 +302,7 @@ void DataChannel::unconfigure()
+ void DataChannel::configure_socket(int socket_fd)
+ {
+     const std::string& peer_ip = this->peer_ip();
+-    auto [local_ip, local_device, local_mac] = core::local_ip_and_mac(peer_ip);
++    auto [local_ip, local_device, local_mac] = local_ip_and_mac(peer_ip);
+ 
+     if (broadcast_port_) {
+         //
+diff --git a/src/hololink/core/enumerator.cpp b/src/hololink/core/enumerator.cpp
+index 5663768..3a7750c 100644
+--- a/src/hololink/core/enumerator.cpp
++++ b/src/hololink/core/enumerator.cpp
+@@ -366,7 +366,7 @@ void Enumerator::enumeration_packets(
+     const std::function<bool(Enumerator&, const std::vector<uint8_t>&, Metadata&)>& call_back,
+     const std::shared_ptr<Timeout>& timeout)
+ {
+-    core::UniqueFileDescriptor bootp_socket(socket(AF_INET, SOCK_DGRAM, 0));
++    UniqueFileDescriptor bootp_socket(socket(AF_INET, SOCK_DGRAM, 0));
+     if (!bootp_socket) {
+         throw std::runtime_error("Failed to create socket");
+     }
+@@ -724,7 +724,7 @@ bool Enumerator::configure_socket(int fd, uint32_t port /*=12267u*/, const std::
+ 
+ std::tuple<Metadata, std::vector<uint8_t>> Enumerator::handle_bootp_fd(int fd)
+ {
+-    constexpr size_t receive_message_size = hololink::core::UDP_PACKET_SIZE;
++    constexpr size_t receive_message_size = UDP_PACKET_SIZE;
+     std::vector<uint8_t> iobuf(receive_message_size);
+     std::array<uint8_t, CMSG_ALIGN(receive_message_size)> controlbuf;
+ 
+diff --git a/src/hololink/core/hololink.cpp b/src/hololink/core/hololink.cpp
+index ddee89b..fef1441 100644
+--- a/src/hololink/core/hololink.cpp
++++ b/src/hololink/core/hololink.cpp
+@@ -844,7 +844,7 @@ std::vector<uint8_t> Hololink::receive_control(const std::shared_ptr<Timeout>& t
+             continue;
+         }
+ 
+-        std::vector<uint8_t> received(hololink::core::UDP_PACKET_SIZE);
++        std::vector<uint8_t> received(UDP_PACKET_SIZE);
+         sockaddr_in peer_address {};
+         peer_address.sin_family = AF_UNSPEC;
+         socklen_t peer_address_len = sizeof(peer_address);
+@@ -1883,7 +1883,7 @@ void Hololink::async_event_thread()
+     HSB_LOG_TRACE("async_event_thread starting.");
+     int async_event_socket = async_event_socket_.get();
+     while (true) {
+-        std::vector<uint8_t> received(hololink::core::UDP_PACKET_SIZE);
++        std::vector<uint8_t> received(UDP_PACKET_SIZE);
+         sockaddr_in peer_address {};
+         peer_address.sin_family = AF_UNSPEC;
+         socklen_t peer_address_len = sizeof(peer_address);
+diff --git a/src/hololink/core/hololink.hpp b/src/hololink/core/hololink.hpp
+index 9c1e31d..944857b 100644
+--- a/src/hololink/core/hololink.hpp
++++ b/src/hololink/core/hololink.hpp
+@@ -889,8 +889,8 @@ private:
+     uint16_t sequence_ = 0x100;
+     bool sequence_number_checking_ = true;
+ 
+-    core::UniqueFileDescriptor control_socket_;
+-    core::UniqueFileDescriptor async_event_socket_;
++    UniqueFileDescriptor control_socket_;
++    UniqueFileDescriptor async_event_socket_;
+     uint16_t async_event_socket_port_;
+     uint32_t hsb_ip_version_;
+     uint32_t datecode_;
+diff --git a/src/hololink/core/logging_internal.hpp b/src/hololink/core/logging_internal.hpp
+index a788729..06a4c97 100644
+--- a/src/hololink/core/logging_internal.hpp
++++ b/src/hololink/core/logging_internal.hpp
+@@ -77,7 +77,13 @@ template <typename FormatT, typename... ArgsT>
+ static inline void hsb_log_fmt(char const* file, unsigned line, const char* function, HsbLogLevel level, const FormatT& format, ArgsT&&... args)
+ {
+     if (level >= hsb_log_level) {
+-        auto fmt_args = fmt::make_format_args<fmt::buffer_context<fmt::char_t<FormatT>>>(args...);
++// Version number of the fmt library represented as (major * 10000 + minor * 100 + patch)
++#if FMT_VERSION >= 110000
++    auto fmt_args = fmt::make_format_args(args...);
++#else
++    auto fmt_args = fmt::make_format_args<fmt::buffer_context<fmt::char_t<FormatT>>>(args...);
++#endif
++        
+         hsb_logger(file, line, function, level, fmt::vformat(format, fmt_args).c_str());
+     }
+ }
+diff --git a/src/hololink/core/networking.cpp b/src/hololink/core/networking.cpp
+index b761e2e..ebca913 100644
+--- a/src/hololink/core/networking.cpp
++++ b/src/hololink/core/networking.cpp
+@@ -32,8 +32,6 @@
+ 
+ #include "logging_internal.hpp"
+ 
+-namespace hololink::core {
+-
+ size_t round_up(size_t value, size_t alignment)
+ {
+     if (alignment == 0) {
+@@ -205,4 +203,3 @@ MacAddress local_mac(const std::string& interface)
+     return mac;
+ }
+ 
+-} // namespace hololink::core
+diff --git a/src/hololink/core/networking.hpp b/src/hololink/core/networking.hpp
+index 64ec2ff..b9d1aae 100644
+--- a/src/hololink/core/networking.hpp
++++ b/src/hololink/core/networking.hpp
+@@ -21,6 +21,7 @@
+ #include <unistd.h> // for close()
+ 
+ #include <array>
++#include <cstdint>
+ #include <memory>
+ #include <stdexcept>
+ #include <string>
+@@ -28,8 +29,6 @@
+ 
+ #include "nullable_pointer.hpp"
+ 
+-namespace hololink::core {
+-
+ // When we recv from a UDP socket, use
+ // a buffer large enough to accommodate
+ // a 9k jumbo packet.
+@@ -73,6 +72,4 @@ std::tuple<std::string, std::string, MacAddress> local_ip_and_mac_from_socket(in
+  */
+ MacAddress local_mac(const std::string& interface);
+ 
+-} // namespace hololink::core
+-
+ #endif /* SRC_HOLOLINK_CORE_NULLABLE_POINTER */
+diff --git a/src/hololink/emulation/coe_data_plane.cpp b/src/hololink/emulation/coe_data_plane.cpp
+index 398843e..d76d0db 100644
+--- a/src/hololink/emulation/coe_data_plane.cpp
++++ b/src/hololink/emulation/coe_data_plane.cpp
+@@ -67,10 +67,10 @@ void COEDataPlane::update_metadata()
+     metadata_->dest_mac_high = values[1];
+     metadata_->dest_ip_address = values[2];
+     metadata_->frame_size = values[3];
+-    if (values[4] > UINT16_MAX / hololink::core::PAGE_SIZE) {
++    if (values[4] > UINT16_MAX / PAGE_SIZE) {
+         throw std::runtime_error("payload_size * hololink::core::PAGE_SIZE must fit in uint16_t");
+     }
+-    metadata_->payload_size = values[4] * hololink::core::PAGE_SIZE;
++    metadata_->payload_size = values[4] * PAGE_SIZE;
+     if (values[5] > UINT16_MAX) {
+         throw std::runtime_error("dest_port must be 16-bit unsigned integer");
+     }
+diff --git a/src/hololink/emulation/data_plane.cpp b/src/hololink/emulation/data_plane.cpp
+index 21f3460..8de4288 100644
+--- a/src/hololink/emulation/data_plane.cpp
++++ b/src/hololink/emulation/data_plane.cpp
+@@ -89,7 +89,7 @@ static inline size_t serialize_vendor_info(hololink::core::Serializer& serialize
+         : 0;
+ }
+ 
+-static inline size_t serialize_chaddr(hololink::core::Serializer& serializer, hololink::core::MacAddress& mac_address)
++static inline size_t serialize_chaddr(hololink::core::Serializer& serializer, MacAddress& mac_address)
+ {
+     size_t start = serializer.length();
+     if (mac_address.size() > BOOTP_CHADDR_SIZE) {
+diff --git a/src/hololink/emulation/linux_data_plane.cpp b/src/hololink/emulation/linux_data_plane.cpp
+index da6db7a..9cd41be 100644
+--- a/src/hololink/emulation/linux_data_plane.cpp
++++ b/src/hololink/emulation/linux_data_plane.cpp
+@@ -63,7 +63,7 @@ void LinuxDataPlane::update_metadata()
+     metadata_->dest_mac_high = values[1];
+     metadata_->dest_ip_address = values[2];
+     metadata_->frame_size = values[3];
+-    metadata_->payload_size = values[4] * hololink::core::PAGE_SIZE;
++    metadata_->payload_size = values[4] * PAGE_SIZE;
+     if (values[5] > UINT16_MAX) {
+         throw std::runtime_error("dest_port is too large for uint16_t");
+     }
+@@ -79,7 +79,7 @@ void LinuxDataPlane::update_metadata()
+     linux_metadata->qp = values[7];
+     linux_metadata->rkey = values[8];
+     linux_metadata->page_mask = values[9];
+-    linux_metadata->metadata_offset = (metadata_->frame_size + hololink::core::PAGE_SIZE - 1) & ~(hololink::core::PAGE_SIZE - 1);
++    linux_metadata->metadata_offset = (metadata_->frame_size + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+ 
+     uint32_t next_page = next_page_;
+     uint32_t page = next_page;
+diff --git a/src/hololink/emulation/linux_transmitter.cpp b/src/hololink/emulation/linux_transmitter.cpp
+index af447d7..47340f2 100644
+--- a/src/hololink/emulation/linux_transmitter.cpp
++++ b/src/hololink/emulation/linux_transmitter.cpp
+@@ -336,7 +336,7 @@ LinuxTransmitter::~LinuxTransmitter()
+ int64_t LinuxTransmitter::send(const TransmissionMetadata* metadata, const DLTensor& tensor)
+ {
+     // buffer for packet data
+-    uint8_t mesg[hololink::core::UDP_PACKET_SIZE];
++    uint8_t mesg[UDP_PACKET_SIZE];
+     // buffer for immediate value and frame metadata
+     LinuxTransmissionMetadata* linux_metadata = (LinuxTransmissionMetadata*)metadata;
+     // if no destination port or address, short circuit and return 0
+diff --git a/src/hololink/emulation/net.hpp b/src/hololink/emulation/net.hpp
+index 891d8b7..6ec9a09 100644
+--- a/src/hololink/emulation/net.hpp
++++ b/src/hololink/emulation/net.hpp
+@@ -65,7 +65,7 @@ typedef struct IPAddress {
+     in_addr_t ip_address { 0 }; ///< IP address in network byte order
+     in_addr_t subnet_mask { 0 }; ///< Subnet mask in network byte order
+     in_addr_t broadcast_address { 0 }; ///< Broadcast address in network byte order
+-    hololink::core::MacAddress mac { 0 }; ///< MAC address of the interface
++    MacAddress mac { 0 }; ///< MAC address of the interface
+     uint16_t port { hololink::DATA_SOURCE_UDP_PORT }; ///< UDP port number (defaults to DATA_SOURCE_UDP_PORT)
+     uint8_t flags { 0 }; ///< Configuration flags indicating which fields are valid
+     /**
+diff --git a/src/hololink/operators/CMakeLists.txt b/src/hololink/operators/CMakeLists.txt
+index eee3a51..62b59d9 100644
+--- a/src/hololink/operators/CMakeLists.txt
++++ b/src/hololink/operators/CMakeLists.txt
+@@ -55,15 +55,8 @@ if(HOLOLINK_BUILD_FUSA)
+ add_subdirectory(fusa_coe_capture)
+ endif()
+ add_subdirectory(image_processor)
+-add_subdirectory(iq_dec)
+-add_subdirectory(iq_enc)
+ add_subdirectory(linux_coe_receiver)
+-add_subdirectory(linux_receiver)
+ add_subdirectory(packed_format_converter)
+-add_subdirectory(roce_receiver)
+-add_subdirectory(roce_transmitter)
+-add_subdirectory(sig_gen)
+-add_subdirectory(sig_viewer)
+ if(HOLOLINK_BUILD_SIPL)
+   add_subdirectory(sipl_capture)
+ endif()
+diff --git a/src/hololink/operators/base_receiver_op.hpp b/src/hololink/operators/base_receiver_op.hpp
+index a280645..40175d1 100644
+--- a/src/hololink/operators/base_receiver_op.hpp
++++ b/src/hololink/operators/base_receiver_op.hpp
+@@ -78,7 +78,7 @@ protected:
+     std::shared_ptr<holoscan::AsynchronousCondition> frame_ready_condition_;
+     uint64_t frame_count_;
+ 
+-    core::UniqueFileDescriptor data_socket_;
++    UniqueFileDescriptor data_socket_;
+ 
+     virtual void start_receiver() = 0;
+     virtual void stop_receiver() = 0;
+diff --git a/src/hololink/operators/csi_to_bayer/csi_to_bayer.cpp b/src/hololink/operators/csi_to_bayer/csi_to_bayer.cpp
+index 5e6e721..99a96b3 100644
+--- a/src/hololink/operators/csi_to_bayer/csi_to_bayer.cpp
++++ b/src/hololink/operators/csi_to_bayer/csi_to_bayer.cpp
+@@ -249,7 +249,7 @@ uint32_t CsiToBayerOp::receiver_start_byte()
+ uint32_t CsiToBayerOp::received_line_bytes(uint32_t transmitted_line_bytes)
+ {
+     // Bytes are padded to 8.
+-    return hololink::core::round_up(transmitted_line_bytes, 8);
++    return round_up(transmitted_line_bytes, 8);
+ }
+ 
+ uint32_t CsiToBayerOp::transmitted_line_bytes(hololink::csi::PixelFormat pixel_format, uint32_t pixel_width)
+diff --git a/src/hololink/operators/fusa_coe_capture/fusa_coe_capture.cpp b/src/hololink/operators/fusa_coe_capture/fusa_coe_capture.cpp
+index 60f6609..3dc959d 100644
+--- a/src/hololink/operators/fusa_coe_capture/fusa_coe_capture.cpp
++++ b/src/hololink/operators/fusa_coe_capture/fusa_coe_capture.cpp
+@@ -274,7 +274,7 @@ uint32_t FusaCoeCaptureOp::receiver_start_byte()
+ 
+ uint32_t FusaCoeCaptureOp::received_line_bytes(uint32_t line_bytes)
+ {
+-    return hololink::core::round_up(line_bytes, 64);
++    return round_up(line_bytes, 64);
+ }
+ 
+ uint32_t FusaCoeCaptureOp::transmitted_line_bytes(csi::PixelFormat pixel_format,
+@@ -322,9 +322,9 @@ bool FusaCoeCaptureOp::alloc_sci_buf(NvSciBufObj& buf_obj, size_t& size)
+     // Add padding lines to the buffer for sensor and HSB metadata.
+     uint32_t width = pixel_width_;
+     uint32_t height = pixel_height_;
+-    height += hololink::core::round_up(start_byte_, bytes_per_line_) / bytes_per_line_;
+-    height += hololink::core::round_up(trailing_bytes_, bytes_per_line_) / bytes_per_line_;
+-    height += hololink::core::round_up(hololink::METADATA_SIZE, bytes_per_line_) / bytes_per_line_;
++    height += round_up(start_byte_, bytes_per_line_) / bytes_per_line_;
++    height += round_up(trailing_bytes_, bytes_per_line_) / bytes_per_line_;
++    height += round_up(hololink::METADATA_SIZE, bytes_per_line_) / bytes_per_line_;
+ 
+     // MGBE requires 4k alignment
+     const uint32_t mgbe_coe_alignment = 4 * 1024;
+diff --git a/src/hololink/operators/linux_coe_receiver/linux_coe_receiver.cpp b/src/hololink/operators/linux_coe_receiver/linux_coe_receiver.cpp
+index b791cd5..4f9ec7d 100644
+--- a/src/hololink/operators/linux_coe_receiver/linux_coe_receiver.cpp
++++ b/src/hololink/operators/linux_coe_receiver/linux_coe_receiver.cpp
+@@ -122,7 +122,7 @@ void LinuxCoeReceiver::run()
+     core::NvtxTrace::setThreadName("linux_coe_receiver");
+ 
+     // Round the buffer size up so that the next buffer starts on a 128-byte boundary.
+-    size_t buffer_size = hololink::core::round_up(cu_buffer_size_, 128);
++    size_t buffer_size = round_up(cu_buffer_size_, 128);
+     // Allocate three pages, details below
+     CUresult cu_result = cuMemHostAlloc((void**)(&local_), buffer_size * 3, CU_MEMHOSTALLOC_WRITECOMBINED);
+     if (cu_result != CUDA_SUCCESS) {
+diff --git a/src/hololink/operators/packed_format_converter/packed_format_converter.cpp b/src/hololink/operators/packed_format_converter/packed_format_converter.cpp
+index 55ce245..757c190 100644
+--- a/src/hololink/operators/packed_format_converter/packed_format_converter.cpp
++++ b/src/hololink/operators/packed_format_converter/packed_format_converter.cpp
+@@ -220,7 +220,7 @@ uint32_t PackedFormatConverterOp::receiver_start_byte()
+ 
+ uint32_t PackedFormatConverterOp::received_line_bytes(uint32_t transmitted_line_bytes)
+ {
+-    return hololink::core::round_up(transmitted_line_bytes, 64);
++    return round_up(transmitted_line_bytes, 64);
+ }
+ 
+ uint32_t PackedFormatConverterOp::transmitted_line_bytes(hololink::csi::PixelFormat pixel_format,
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 98d4717..b57d28b 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -65,27 +65,4 @@ endfunction()
+ 
+ # ##################################################################################################
+ # * core tests ----------------------------------------------------------------------------------
+-ConfigureTest(
+-    iq_encoder_decoder_test
+-  SOURCES
+-    iq_encoder_decoder_test.cpp
+-  LINK_LIBRARIES
+-    hololink::operators::iq_dec
+-    hololink::operators::iq_enc
+-)
+ 
+-ConfigureTest(
+-    signal_generator_test
+-  SOURCES
+-    signal_generator_test.cpp
+-  LINK_LIBRARIES
+-    hololink::operators::sig_gen
+-)
+-
+-ConfigureTest(
+-    roce_transmitter_test
+-  SOURCES
+-  roce_transmitter_test.cpp
+-  LINK_LIBRARIES
+-    hololink::operators::roce_transmitter
+-)
+diff --git a/tools/set_ip/set_ip.cpp b/tools/set_ip/set_ip.cpp
+index db49f4b..da01a37 100644
+--- a/tools/set_ip/set_ip.cpp
++++ b/tools/set_ip/set_ip.cpp
+@@ -132,13 +132,13 @@ void set_ip(const std::unordered_map<std::string, std::string>& mac_ip_map, cons
+         // Update the IP
+         std::string local_device = metadata.get<std::string>("interface").value_or("");
+         std::string local_ip = metadata.get<std::string>("interface_address").value_or("");
+-        auto local_mac = hololink::core::local_mac(local_device);
++        auto local_mac_ = local_mac(local_device);
+         std::stringstream mac_str;
+-        for (size_t i = 0; i < local_mac.size(); ++i) {
++        for (size_t i = 0; i < local_mac_.size(); ++i) {
+             if (i > 0) {
+                 mac_str << ":";
+             }
+-            mac_str << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(local_mac[i]) << std::dec;
++            mac_str << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(local_mac_[i]) << std::dec;
+         }
+ 
+         if (new_peer_ip == local_ip) {
+-- 
+2.43.0
+
