@@ -1,0 +1,112 @@
+From bb5d8f551b6260dbad1ef2f709e02bebfae4ac8e Mon Sep 17 00:00:00 2001
+From: Ilies CHERGUI <ichergui@nvidia.com>
+Date: Fri, 9 Jan 2026 11:15:31 -0800
+Subject: [PATCH] Updates for OE cross builds
+
+Upstream-Status: Inappropriate [OE-specific]
+Signed-off-by: Ilies CHERGUI <ichergui@nvidia.com>
+---
+ CMakeLists.txt                                 |  4 ----
+ hsl/integrations/cmake/hsl_compile_rules.cmake | 16 ++++++++++++++++
+ hsl/pyhsl/pyhsl.py                             | 11 +++++++++++
+ uddf/samples/drivers/coe/CMakeLists.txt        |  4 ----
+ uddf/samples/drivers/eagleAIO/CMakeLists.txt   |  4 ----
+ 5 files changed, 27 insertions(+), 12 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9410a1b..85e6ea3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -17,10 +17,6 @@ project(
+   LANGUAGES CXX
+ )
+ 
+-# Set the HSL and UDDF directories relative to this CMakeLists.txt
+-set(PDK_HSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/hsl")
+-set(PDK_UDDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/uddf")
+-
+ # Verify that HSL and UDDF directories exist
+ if(NOT EXISTS "${PDK_HSL_DIR}")
+     message(FATAL_ERROR "HSL directory not found at ${PDK_HSL_DIR}")
+diff --git a/hsl/integrations/cmake/hsl_compile_rules.cmake b/hsl/integrations/cmake/hsl_compile_rules.cmake
+index a52e087..29a60af 100644
+--- a/hsl/integrations/cmake/hsl_compile_rules.cmake
++++ b/hsl/integrations/cmake/hsl_compile_rules.cmake
+@@ -168,6 +168,22 @@ function(hsl_add_driver_sources TARGET)
+     endif()
+ 
+     set(HSLCOMPILE_CUSTOM_COMMAND_DEPS ${CURRENT_ABS_HSL_SOURCE} ${HSL_DEPENDENCY_FILES})
++
++    set(NVHSLENCODERPY_SO
++        ${PDK_HSL_DIR}/pyhsl/nvhslencoderpy.cpython-312-aarch64-linux-gnu.so
++    )
++
++    if(EXISTS ${NVHSLENCODERPY_SO})
++        add_library(nvhslencoderpy SHARED IMPORTED)
++        set_target_properties(nvhslencoderpy PROPERTIES
++            IMPORTED_LOCATION "${NVHSLENCODERPY_SO}"
++        )
++    endif()
++
++    if(TARGET nvhslencoderpy)
++        message(STATUS "nvhslencoderpy target available")
++    endif()
++
+     if(TARGET nvhslencoderpy)
+       # If nvhslencoderpy exists (e.g. we've found it from FetchContent), add it as a dependency. It
+       # is crucial that the encoder is built before the HSL is compiled.
+diff --git a/hsl/pyhsl/pyhsl.py b/hsl/pyhsl/pyhsl.py
+index 684e43b..e4e504f 100755
+--- a/hsl/pyhsl/pyhsl.py
++++ b/hsl/pyhsl/pyhsl.py
+@@ -17,6 +17,17 @@ if Configuration.s_use_py_encoder:
+     Configuration.s_logger.warning("Using Python encoder")
+     from hslencoder import *
+ else:
++    import importlib.util
++    import sys, os
++    HERE = os.path.normpath(os.path.dirname(__file__))
++    lib_path = os.path.join(HERE, 'nvhslencoderpy.cpython-312-aarch64-linux-gnu.so')
++    module_name = 'nvhslencoderpy'
++
++    spec = importlib.util.spec_from_file_location(module_name, lib_path)
++    nvhslencoderpy = importlib.util.module_from_spec(spec)
++    sys.modules[module_name] = nvhslencoderpy
++    spec.loader.exec_module(nvhslencoderpy)
++
+     from nvhslencoderpy import *
+ from hslcpackager import *
+ import collections
+diff --git a/uddf/samples/drivers/coe/CMakeLists.txt b/uddf/samples/drivers/coe/CMakeLists.txt
+index 75a73dc..203a1f5 100644
+--- a/uddf/samples/drivers/coe/CMakeLists.txt
++++ b/uddf/samples/drivers/coe/CMakeLists.txt
+@@ -17,10 +17,6 @@ project(
+   LANGUAGES CXX
+ )
+ 
+-# Set the HSL and UDDF directories relative to this CMakeLists.txt
+-set(PDK_HSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../hsl")
+-set(PDK_UDDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../uddf")
+-
+ set(HSL_PYTHON_SCRIPT_DIR "${PDK_HSL_DIR}/pyhsl")
+ set(HSL_PYTHON_MODULE_DIR "${PDK_HSL_DIR}/pyhsl")
+ 
+diff --git a/uddf/samples/drivers/eagleAIO/CMakeLists.txt b/uddf/samples/drivers/eagleAIO/CMakeLists.txt
+index a340d90..39f79b9 100644
+--- a/uddf/samples/drivers/eagleAIO/CMakeLists.txt
++++ b/uddf/samples/drivers/eagleAIO/CMakeLists.txt
+@@ -19,10 +19,6 @@ project(
+ 
+ add_subdirectory(hololink/core)
+ 
+-# Set the HSL and UDDF directories relative to this CMakeLists.txt
+-set(PDK_HSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../hsl")
+-set(PDK_UDDF_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../uddf")
+-
+ set(HSL_PYTHON_SCRIPT_DIR "${PDK_HSL_DIR}/pyhsl")
+ set(HSL_PYTHON_MODULE_DIR "${PDK_HSL_DIR}/pyhsl")
+ 
+-- 
+2.34.1
+
